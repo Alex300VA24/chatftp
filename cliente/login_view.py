@@ -1,7 +1,9 @@
 import flet as ft
 from socket_client import enviar_mensaje
 
-def mostrar_login(page: ft.Page):
+def mostrar_login(page: ft.Page, guardar_usuario_callback=None):
+
+    page.controls.clear()
     usuario = ft.TextField(label="Usuario", autofocus=True)
     clave = ft.TextField(label="Contraseña", password=True)
     mensaje = ft.Text("")
@@ -19,12 +21,9 @@ def mostrar_login(page: ft.Page):
         page.update()
 
     def procesar_registro(e):
-        resp = enviar_mensaje(f"REGISTER|{usuario.value}|{clave.value}")
-        if resp == "REGISTER_OK":
-            mensaje.value = "✅ Usuario registrado. Ahora inicia sesión."
-        else:
-            mensaje.value = f"❌ {resp}"
-        page.update()
+        from register_view import mostrar_registro
+        mostrar_registro(page)
+
 
     page.title = "MyFTP - Login"
     page.vertical_alignment = ft.MainAxisAlignment.CENTER

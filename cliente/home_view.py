@@ -1,14 +1,105 @@
 import flet as ft
+import os
+import socket_client
 from socket_client import enviar_mensaje, listar_directorio, cambiar_directorio, obtener_ruta_actual
-from socket_client import crear_directorio, eliminar_directorio, eliminar_archivo
+from socket_client import crear_directorio, eliminar_directorio, eliminar_archivo, subir_archivo, descargar_archivo
+from socket_client import procesar_notify, iniciar_escucha
 from chat_view import mostrar_chat
+import sys
+import os
+
+# Agrega el path del directorio raíz del proyecto (padre de 'servidor')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from servidor import auth  # ahora sí puedes importar
+
 
 
 def mostrar_home(page, username):
+
+
+    def recibir_mensaje_home(mensaje: str):
+        print('Recibio mensaje del servidor')
+        if mensaje.startswith("NOTIFY|"):
+            print('Dio verdadero al mensaje')
+            remitente = procesar_notify(mensaje, username)
+            if remitente:
+                mostrar_dialogo_notify(page, remitente)
+
+
+    def mostrar_dialogo_notify(page, remitente: str):
+        print('Llega a mostrar dialogo notify')
+
+        dialogo = None  # Declaramos la variable para que esté en el scope
+
+        def cerrar_dialogo(e=None):
+            nonlocal dialogo
+            if dialogo:
+                dialogo.open = False
+                page.update()
+
+        def aceptar_chat(e=None):
+            nonlocal dialogo
+            if dialogo:
+                dialogo.open = False
+                print("Aceptar presionado")
+                page.update()
+                from chat_view import mostrar_chat
+                from socket_client import enviar_mensaje
+
+                # Abrir el chat y obtener el ListView de mensajes
+                mensajes = mostrar_chat(page, username=username, destinatario=remitente)
+
+                # Enviar mensaje automático de conexión
+                if remitente:
+                    mensaje_conexion = "Está conectado al chat"
+                    # Nuevo protocolo: remitente | destinatario | mensaje
+                    enviar_mensaje(f"CHAT|{username}|{remitente}|{mensaje_conexion}")
+
+                    # Mostrarlo en tu pantalla como si lo recibieras del otro usuario (verde)
+                    mensajes.controls.append(
+                        ft.Text(f"{remitente}: {mensaje_conexion}", color=ft.Colors.GREEN)
+                    )
+                    page.update()
+
+        print("Construyendo título...")
+        titulo = ft.Text("Solicitud de chat privado", weight=ft.FontWeight.BOLD)
+        print("Construyendo contenido...")
+        contenido = ft.Text(f"{remitente} quiere hablar contigo.")
+        print("Construyendo botones...")
+        btn_cerrar = ft.TextButton("Cerrar", style=ft.ButtonStyle(color=ft.Colors.ERROR), on_click=cerrar_dialogo)
+        btn_aceptar = ft.FilledButton("Aceptar", icon=ft.Icons.CHAT, on_click=aceptar_chat)
+        print("Creando AlertDialog...")
+        dialogo = ft.AlertDialog(
+            title=titulo,
+            content=contenido,
+            actions=[btn_cerrar, btn_aceptar],
+            actions_alignment=ft.MainAxisAlignment.END,
+            modal=True,
+            shape=ft.RoundedRectangleBorder(radius=10)
+        )
+        print("AlertDialog creado")
+
+        try:
+            page.overlay.clear()
+            page.overlay.append(dialogo)
+            dialogo.open = True
+            page.update()
+            print('se actualizo')
+        except Exception as e:
+            print(f"[ERROR MOSTRAR DIALOGO] {e}")
+
+
+    print(f"[DEBUG] Registrando listener de {username}")
+    iniciar_escucha(recibir_mensaje_home)
+
+
+
     page.title = "MyFTP - Panel Principal"
     page.window_width = 600
     page.window_height = 600
     page.scroll = ft.ScrollMode.AUTO
+    
 
     output_text = ft.Text("", size=14)
     ruta_label = ft.Text("", size=13, italic=True, color=ft.Colors.BLUE_GREY)
@@ -108,8 +199,10 @@ def mostrar_home(page, username):
     
     def logout(e):
         enviar_mensaje(f"LOGOUT|{username}")
-        from login_view import mostrar_login 
+        from login_view import mostrar_login
+        page.controls.clear()
         mostrar_login(page)
+
 
  
     def crear_carpeta(e):
@@ -287,34 +380,141 @@ def mostrar_home(page, username):
         delete_dialog.open = True
         page.update()
 
+    def subir_archivo_desde_dialogo(e):
+        def manejar_archivo_seleccionado(result):
+            if not result.files:
+                return
+            archivo_local = result.files[0].path
+            try:
+                output_text.value = "Subiendo archivo..."
+                subir_archivo(username, archivo_local)
+                output_text.value = f"Archivo '{archivo_local}' subido con éxito."
+                cargar_directorio()
+                page.update()
+            except Exception as ex:
+                output_text.value = f"Error al subir: {str(ex)}"
+                page.update()
 
-    btn_chat = ft.ElevatedButton("Abrir chat", on_click=abrir_chat)
-    btn_logout = ft.ElevatedButton("Cerrar sesión", on_click=logout)
-    ejecutar_btn = ft.ElevatedButton("Ejecutar comando", on_click=ejecutar_comando)
-    ejecutar_mkdir = ft.ElevatedButton("Crear carpeta", on_click=crear_carpeta)
-    ejecutar_eliminado = ft.ElevatedButton("Eliminar archivo/carpeta", on_click=eliminar_item)
-    comandos_utiles = ft.Text("Comandos disponibles: ls, cd, cd.., mkdir, rmdir, put, get", italic=True, size=12, color=ft.Colors.GREY)
+        file_picker = ft.FilePicker(on_result=manejar_archivo_seleccionado)
+        page.overlay.append(file_picker)
+        page.update()  # 🔁 Esto sincroniza el control con la página antes de usarlo
 
-    # Interfaz completa
+        file_picker.pick_files(allow_multiple=False)
+
+    
+    def descargar_archivo_dialogo(e):
+        input_nombre = ft.TextField(
+            label="Nombre del archivo a descargar",
+            hint_text="Ej: notas.txt",
+            autofocus=True
+        )
+
+        def cerrar_dialogo(e=None):
+            dialog.open = False
+            page.update()
+
+        def confirmar_descarga(e):
+            nombre_archivo = input_nombre.value.strip()
+            if not nombre_archivo:
+                input_nombre.error_text = "Ingrese un nombre válido"
+                dialog.update()
+                return
+            try:
+                output_text.value = "Descargando archivo..."
+                # Carpeta "descargas" en la misma raíz del script
+                carpeta_descargas = os.path.join(os.getcwd(), "descargas")
+                os.makedirs(carpeta_descargas, exist_ok=True)  # Crea la carpeta si no existe
+
+                destino = os.path.join(carpeta_descargas, nombre_archivo)
+
+                descargar_archivo(username, nombre_archivo, destino)
+                print('si llegaste hasta aqui significa que funciono')
+                output_text.value = f"Archivo '{nombre_archivo}' descargado con éxito en: {destino}"
+                cerrar_dialogo()
+                page.update()
+
+            except Exception as ex:
+                output_text.value = f"Error al descargar: {str(ex)}"
+                page.update()
+
+        dialog = ft.AlertDialog(
+            title=ft.Text("Descargar archivo"),
+            content=input_nombre,
+            actions=[
+                ft.TextButton("Cancelar", on_click=cerrar_dialogo),
+                ft.FilledButton("Descargar", icon=ft.Icons.DOWNLOAD, on_click=confirmar_descarga)
+            ],
+            modal=True
+        )
+
+        page.overlay.clear()
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
+
+    def construir_lista_usuarios(mi_usuario, usuarios_conectados, notificar_callback):
+        botones = []
+        for usuario in usuarios_conectados:
+            if usuario != mi_usuario:
+                boton = ft.ElevatedButton(
+                    text=usuario,
+                    on_click=lambda e, u=usuario: notificar_callback(u)
+                )
+                botones.append(boton)
+        return ft.Column(botones)
+    
+    def notificar_usuario(destinatario):
+        output_text.value = f"Notificación enviada a {destinatario}"
+        enviar_mensaje(f"NOTIFY|{destinatario}|{username}")  # NUEVO COMANDO
+        page.update()
+        from chat_view import mostrar_chat
+        mostrar_chat(page, username=username, destinatario=destinatario)
+
+
+    usuarios_activos = auth.obtener_usuarios_activos()
+
+    lista_usuarios = construir_lista_usuarios(username, usuarios_activos, notificar_usuario)
+
+    
+    def abrir_archivo(e):
+        output_text.value = "Selecciona un archivo"
+        page.update()
+
+
+    # Botones superiores en la barra de herramientas
+    # Botones superiores en la barra de herramientas
+    barra_herramientas = ft.Row([
+        ft.IconButton(icon=ft.Icons.CREATE_NEW_FOLDER, tooltip="Crear carpeta", on_click=crear_carpeta),
+        ft.IconButton(icon=ft.Icons.FOLDER_OPEN, tooltip="Abrir archivo", on_click=abrir_archivo),
+        ft.IconButton(icon=ft.Icons.DELETE, tooltip="Eliminar", on_click=eliminar_item),
+        ft.IconButton(icon=ft.Icons.UPLOAD_FILE, tooltip="Subir archivo", on_click=subir_archivo_desde_dialogo),
+        ft.IconButton(icon=ft.Icons.DOWNLOAD, tooltip="Descargar archivo", on_click=descargar_archivo_dialogo)  # <-- NUEVO
+    ], alignment=ft.MainAxisAlignment.START)
+
+
+    # Panel derecho con contenido principal
+    panel_contenido = ft.Column([
+        barra_herramientas,
+        ruta_label,
+        lista_directorio,
+        ft.Divider(),
+        output_text
+    ], expand=True)
+
+    # Estructura general de la app
+    layout = ft.Row([
+        ft.Container(content=lista_usuarios, padding=10, width=150, bgcolor=ft.Colors.GREY_200),
+        ft.VerticalDivider(width=1),
+        ft.Container(content=panel_contenido, padding=10, expand=True)
+    ], expand=True)
+
+    # Limpiar y añadir layout principal
     page.controls.clear()
-    page.add(
-        ft.Column([
-            ft.Text(f"Bienvenido, {username}!", size=22, weight=ft.FontWeight.BOLD),
-            comandos_utiles,
-            ft.Row([input_box, ejecutar_btn]),
-            output_text,
-            ft.Divider(),
-            ft.Text("Explorador de archivos:", size=16, weight=ft.FontWeight.W_600),
-            ruta_label,
-            lista_directorio,
-            ft.Divider(),
-            ft.Row([
-                ejecutar_mkdir,
-                ejecutar_eliminado
-            ]),
-            ft.Row([btn_chat, btn_logout])
-        ], spacing=20, expand=True)
-    )
-
+    page.add(layout, ft.Button("Abrir chat", on_click=abrir_chat), ft.Button("Cerrar Session", on_click=logout))
     cargar_directorio()
+
+
     page.update()
+
+    
+

@@ -53,8 +53,13 @@ def verificar_credenciales(username, password):
     cursor.execute("SELECT * FROM usuarios WHERE username=? AND password=?", (username, password))
     resultado = cursor.fetchone()
     conn.close()
-    if resultado:
-        return "LOGIN_OK"
-    else:
-        return "LOGIN_ERROR: Usuario o contraseña incorrectos"
+    return resultado is not None
 
+
+def obtener_usuarios_activos():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM usuarios WHERE activo = 1")
+    usuarios = [fila[0] for fila in cursor.fetchall()]
+    conn.close()
+    return usuarios
