@@ -56,10 +56,12 @@ def verificar_credenciales(username, password):
     return resultado is not None
 
 
+import requests
+
 def obtener_usuarios_activos():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM usuarios WHERE activo = 1")
-    usuarios = [fila[0] for fila in cursor.fetchall()]
-    conn.close()
-    return usuarios
+    url = "http://192.168.3.38:5000/usuarios-activos"  # IP del servidor Flask
+    respuesta = requests.get(url)
+    if respuesta.status_code == 200:
+        return respuesta.json()
+    else:
+        return []

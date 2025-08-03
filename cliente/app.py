@@ -1,5 +1,5 @@
 import flet as ft
-from cliente.login_view import LoginView
+from login_view import LoginView
 from client_chatftp import ChatFTPClient  # tu clase de comunicación UDP
 
 SERVER_IP = "192.168.3.38"
