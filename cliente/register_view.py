@@ -1,4 +1,5 @@
 import flet as ft
+import threading,time
 
 class RegisterView:
     def __init__(self, page: ft.Page, cliente):
@@ -11,6 +12,23 @@ class RegisterView:
 
         self.page.window.prevent_close = False
 
+
+    # Dentro de RegisterView
+
+    def animar_mensaje_registro(self, mensaje_base):
+        relojes = ["🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"]
+        puntos = ["", ".", "..", "..."]
+        i = 0
+        j = 0
+        while getattr(self, "_animar_texto", False):
+            texto = f"{mensaje_base} {puntos[i % len(puntos)]} {relojes[j % len(relojes)]}"
+            self.mensaje.value = texto
+            self.page.update()
+            time.sleep(0.4)
+            i += 1
+            j += 1
+
+
     def registrar(self, e):
         username = self.usuario.value
         password = self.clave.value
@@ -20,12 +38,25 @@ class RegisterView:
             self.page.update()
             return
 
-        resp = self.cliente._enviar_mensaje(f"REGISTER|{username}|{password}")
-        if resp == "REGISTER_OK":
-            self.mensaje.value = "✅ Registro exitoso. Por favor, inicia sesión."
-        else:
-            self.mensaje.value = f"❌ {resp}"
-        self.page.update()
+        self._animar_texto = True
+        threading.Thread(target=self.animar_mensaje_registro, args=("Registrando usuario",), daemon=True).start()
+
+        def tarea():
+            try:
+                resp = self.cliente._enviar_mensaje(f"REGISTER|{username}|{password}")
+                self._animar_texto = False
+                time.sleep(0.3)  # Para que la animación pare antes de mostrar resultado
+                if resp == "REGISTER_OK":
+                    self.mensaje.value = "✅ Registro exitoso. Por favor, inicia sesión."
+                else:
+                    self.mensaje.value = f"❌ {resp}"
+                self.page.update()
+            except Exception as ex:
+                self._animar_texto = False
+                self.mensaje.value = f"❌ Error: {str(ex)}"
+                self.page.update()
+
+        threading.Thread(target=tarea, daemon=True).start()
 
     def volver_login(self, e):
         from login_view import LoginView

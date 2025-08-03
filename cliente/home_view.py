@@ -1,8 +1,7 @@
 import flet as ft
 import os
 import sys
-import subprocess
-import platform
+import time
 from chat_view import ChatView
 
 # Agrega el path del directorio raíz del proyecto
@@ -16,12 +15,31 @@ class HomeView:
         self.user = user
         self.nome = nome
         self.lista_directorio = ft.Column(spacing=5)
-        self.output_text = ft.Text("", size=14)
+        self.output_text = ft.Text("", size=18)
         self.ruta_label = ft.Text("", size=13, italic=True, color=ft.Colors.BLUE_GREY)
         self.input_box = ft.TextField(label="Comando FTP", width=400)
         self.processing = False
 
         self.page.window.prevent_close = True
+
+        self._animar_texto = False  # Controlador del bucle de puntos
+
+
+    def animar_output_texto(self, texto_base="Subiendo archivo"):
+        relojes = ["🕛", "🕒", "🕔", "🕕", "🕗", "🕘", "🕙", "🕚"]
+        puntos = [".", "..", "..."]
+
+        def animacion():
+            i = 0
+            while self._animar_texto:
+                puntos_actuales = puntos[i % len(puntos)]
+                reloj_actual = relojes[i % len(relojes)]
+                self.output_text.value = f"{texto_base} {puntos_actuales} {reloj_actual}"
+                self.page.update()
+                time.sleep(0.5)
+                i += 1
+
+        self.page.run_thread(animacion)
 
 
     def mostrar(self):
@@ -100,39 +118,55 @@ class HomeView:
         self.page.update()
 
     def cargar_directorio(self):
-        self.lista_directorio.controls.clear()
-        items = self.user.listar_directorio()
+        def tarea():
+            self._animar_texto = True
+            self.animar_output_texto("Cargando directorio")
 
-        if not items:
-            self.lista_directorio.controls.append(ft.Text("Directorio vacío", color=ft.Colors.GREY_400))
-        else:
-            for item in items:
-                if item == "..":
+            try:
+                items = self.user.listar_directorio()
+                self.lista_directorio.controls.clear()
+
+                if not items:
                     self.lista_directorio.controls.append(
-                        ft.ListTile(
-                            title=ft.Text(".."),
-                            leading=ft.Icon(ft.Icons.FOLDER_OPEN),
-                            on_click=lambda e, x="..": self.navegar(x)
+                        ft.Text("Directorio vacío", color=ft.Colors.GREY_400)
+                    )
+                else:
+                    for item in items:
+                        if item == "..":
+                            self.lista_directorio.controls.append(
+                                ft.ListTile(
+                                    title=ft.Text(".."),
+                                    leading=ft.Icon(ft.Icons.FOLDER_OPEN),
+                                    on_click=lambda e, x="..": self.navegar(x),
+                                )
+                            )
+                            continue
+
+                        is_folder = "." not in item
+                        icono = ft.Icons.FOLDER if is_folder else ft.Icons.INSERT_DRIVE_FILE
+                        color_icono = ft.Colors.AMBER_300 if is_folder else ft.Colors.BLUE_300
+
+                        self.lista_directorio.controls.append(
+                            ft.ListTile(
+                                title=ft.Text(item, overflow=ft.TextOverflow.ELLIPSIS),
+                                leading=ft.Icon(icono, color=color_icono),
+                                on_click=lambda e, x=item: self.navegar(x),
+                                dense=True,
+                                hover_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                            )
                         )
-                    )
-                    continue
 
-                is_folder = "." not in item
-                icono = ft.Icons.FOLDER if is_folder else ft.Icons.INSERT_DRIVE_FILE
-                color_icono = ft.Colors.AMBER_300 if is_folder else ft.Colors.BLUE_300
+                self.ruta_label.value = f"📂 Ruta: {self.user.obtener_ruta_actual()}"
 
-                self.lista_directorio.controls.append(
-                    ft.ListTile(
-                        title=ft.Text(item, overflow=ft.TextOverflow.ELLIPSIS),
-                        leading=ft.Icon(icono, color=color_icono),
-                        on_click=lambda e, x=item: self.navegar(x),
-                        dense=True,
-                        hover_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
-                    )
-                )
+            except Exception as ex:
+                self.output_text.value = f"❌ Error cargando directorio: {str(ex)}"
+            finally:
+                self.output_text.value = ""
+                self._animar_texto = False
+                self.page.update()
 
-        self.ruta_label.value = f"📂 Ruta: {self.user.obtener_ruta_actual()}"
-        self.page.update()
+        self.page.run_thread(tarea)
+
 
     def navegar(self, nombre):
         if self.processing:
@@ -156,14 +190,41 @@ class HomeView:
             self.processing = False
 
     def abrir_chat(self, e):
-        from chat_view import ChatView
-        ChatView(self.user, self.page, username=self.nome, destinatario=self.destinatario).inicializar()
+        self._animar_texto = True
+        self.animar_output_texto("Abriendo chat")
+
+        def tarea():
+            try:
+                from chat_view import ChatView
+                ChatView(self.user, self.page, username=self.nome, destinatario=self.destinatario).inicializar()
+            except Exception as ex:
+                self.output_text.value = f"❌ Error al abrir el chat: {str(ex)}"
+            finally:
+                self._animar_texto = False
+                self.page.update()
+
+        self.page.run_thread(tarea)
+
 
     def logout(self, e):
-        self.user._enviar_mensaje(f"LOGOUT|{self.nome}")
-        from login_view import LoginView
-        self.page.controls.clear()
-        LoginView(self.page, self.user).mostrar()
+        self._animar_texto = True
+        self.animar_output_texto("Cerrando sesión")
+
+        def tarea():
+            try:
+                self.user._enviar_mensaje(f"LOGOUT|{self.nome}")
+            except Exception as ex:
+                self.output_text.value = f"❌ Error al cerrar sesión: {str(ex)}"
+                return
+            finally:
+                self._animar_texto = False
+
+            from login_view import LoginView
+            self.page.controls.clear()
+            LoginView(self.page, self.user).mostrar()
+
+        self.page.run_thread(tarea)
+
 
     def crear_carpeta(self, e):
         # Crear controles del diálogo
@@ -272,33 +333,38 @@ class HomeView:
                 input_nombre.error_text = "¡Debe especificar un nombre!"
                 delete_dialog.update()
                 return
+            
+            self._animar_texto = True
+            self.animar_output_texto("Eliminando")
                 
-            try:
-                # Detectar si es archivo o carpeta según extensión (sólo por convención)
-                if "." in nombre:
-                    respuesta = self.user.eliminar_archivo(nombre)
-                else:
-                    respuesta = self.user.eliminar_directorio(nombre)
+            def tarea():
+                try:
+                    # Detectar si es archivo o carpeta
+                    if "." in nombre:
+                        respuesta = self.user.eliminar_archivo(nombre)
+                    else:
+                        respuesta = self.user.eliminar_directorio(nombre)
 
-                print(f"Respuesta del servidor: {respuesta}")  # Debug
+                    print(f"Respuesta del servidor: {respuesta}")  # Debug
+                    self.output_text.value = respuesta
+                    self.cargar_directorio()
+                    cerrar_dialogo()
 
-                self.output_text.value = respuesta
-                self.cargar_directorio()
-                cerrar_dialogo()
+                    # Mostrar SnackBar
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"'{nombre}' eliminado", color=ft.Colors.ON_ERROR_CONTAINER),
+                        bgcolor=ft.Colors.ERROR_CONTAINER,
+                        duration=2000
+                    )
+                    self.page.snack_bar.open = True
+                except Exception as ex:
+                    print(f"Error al eliminar: {ex}")
+                    self.output_text.value = f"Error: {str(ex)}"
+                finally:
+                    self._animar_texto = False
+                    self.page.update()
 
-                # Mostrar confirmación
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"'{nombre}' eliminado", color=ft.Colors.ON_ERROR_CONTAINER),
-                    bgcolor=ft.Colors.ERROR_CONTAINER,
-                    duration=2000
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                
-            except Exception as ex:
-                print(f"Error al eliminar: {ex}")  # Debug
-                self.output_text.value = f"Error: {str(ex)}"
-                self.page.update()
+            self.page.run_thread(tarea)
 
         # 4. Configurar diálogo de eliminación
         delete_dialog = ft.AlertDialog(
@@ -331,25 +397,39 @@ class HomeView:
         self.page.update()
 
     def subir_archivo_desde_dialogo(self, e):
+
+
         def manejar_archivo_seleccionado(result):
             if not result.files:
                 return
             archivo_local = result.files[0].path
-            try:
-                self.output_text.value = "Subiendo archivo..."
-                self.user.subir_archivo(archivo_local)
-                self.output_text.value = f"Archivo '{archivo_local}' subido con éxito."
-                self.cargar_directorio()
-                self.page.update()
-            except Exception as ex:
-                self.output_text.value = f"Error al subir: {str(ex)}"
-                self.page.update()
+
+            self._animar_texto = True
+            self.animar_output_texto("Subiendo archivo")
+
+            def tarea():
+                try:
+                    self.user.subir_archivo(archivo_local)
+                    # ⚠️ Espera a que la animación se detenga
+                    self._animar_texto = False
+                    time.sleep(0.6)  # Asegura que la animación se apague antes de mostrar el mensaje final
+                    self.output_text.value = f"✅ Archivo '{os.path.basename(archivo_local)}' subido con éxito."
+                    self.cargar_directorio()
+                except Exception as ex:
+                    self._animar_texto = False
+                    time.sleep(0.6)
+                    self.output_text.value = f"❌ Error al subir: {str(ex)}"
+                finally:
+                    self.page.update()
+
+            self.page.run_thread(tarea)
 
         file_picker = ft.FilePicker(on_result=manejar_archivo_seleccionado)
         self.page.overlay.append(file_picker)
-        self.page.update()  # 🔁 Esto sincroniza el control con la página antes de usarlo
-
+        self.page.update()
         file_picker.pick_files(allow_multiple=False)
+
+        
 
     def descargar_archivo_dialogo(self, e):
         input_nombre = ft.TextField(
@@ -368,23 +448,28 @@ class HomeView:
                 input_nombre.error_text = "Ingrese un nombre válido"
                 dialog.update()
                 return
-            try:
-                self.output_text.value = "Descargando archivo..."
-                # Carpeta "descargas" en la misma raíz del script
-                carpeta_descargas = os.path.join(os.getcwd(), "descargas")
-                os.makedirs(carpeta_descargas, exist_ok=True)  # Crea la carpeta si no existe
+            # Activar animación
+            self._animar_texto = True
+            self.animar_output_texto("Descargando archivo")
 
-                destino = os.path.join(carpeta_descargas, nombre_archivo)
+            def tarea():
+                try:
+                    carpeta_descargas = os.path.join(os.getcwd(), "descargas")
+                    os.makedirs(carpeta_descargas, exist_ok=True)
 
-                self.user.descargar_archivo(nombre_archivo, destino)
-                print('si llegaste hasta aqui significa que funciono')
-                self.output_text.value = f"Archivo '{nombre_archivo}' descargado con éxito en: {destino}"
-                cerrar_dialogo()
-                self.page.update()
+                    destino = os.path.join(carpeta_descargas, nombre_archivo)
 
-            except Exception as ex:
-                self.output_text.value = f"Error al descargar: {str(ex)}"
-                self.page.update()
+                    self.user.descargar_archivo(nombre_archivo, destino)
+                    print('si llegaste hasta aqui significa que funciono')
+                    self.output_text.value = f"✅ Archivo '{nombre_archivo}' descargado con éxito en:\n{destino}"
+                    cerrar_dialogo()
+                except Exception as ex:
+                    self.output_text.value = f"❌ Error al descargar: {str(ex)}"
+                finally:
+                    self._animar_texto = False
+                    self.page.update()
+
+            self.page.run_thread(tarea)
 
         dialog = ft.AlertDialog(
             title=ft.Text("Descargar archivo"),

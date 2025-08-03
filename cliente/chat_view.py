@@ -1,5 +1,6 @@
 import flet as ft
 import os
+import time
 
 class ChatView:
     def __init__(self, user, page: ft.Page, nome: str, destinatario: str = None):
@@ -18,9 +19,26 @@ class ChatView:
         )
 
         self.page.window.prevent_close = True
+        self.output_text = ft.Text(size=14, color=ft.Colors.BLUE_GREY)
+        self._animar_texto = False
 
         self.inicializar()
 
+    def animar_output_texto(self, texto_base="Subiendo archivo"):
+        relojes = ["🕛", "🕒", "🕔", "🕕", "🕗", "🕘", "🕙", "🕚"]
+        puntos = [".", "..", "..."]
+
+        def animacion():
+            i = 0
+            while self._animar_texto:
+                puntos_actuales = puntos[i % len(puntos)]
+                reloj_actual = relojes[i % len(relojes)]
+                self.output_text.value = f"{texto_base} {puntos_actuales} {reloj_actual}"
+                self.page.update()
+                time.sleep(0.5)
+                i += 1
+
+        self.page.run_thread(animacion)
 
     def inicializar(self):
         self.page.controls.clear()
@@ -38,6 +56,7 @@ class ChatView:
                     ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=self.volver_home),
                     self.destino_input
                 ]),
+                self.output_text,
                 self.mensajes,
                 ft.Row([
                     self.mensaje_input,
@@ -138,29 +157,48 @@ class ChatView:
 
     def descargar_archivo_chat(self, origen, nombre_archivo, ruta_remota):
         try:
+            self._animar_texto = True
+            self.animar_output_texto(f"⏳ Descargando y subiendo: {nombre_archivo}")
+
             carpeta_destino = os.path.join(os.getcwd(), "descargas_chat")
             os.makedirs(carpeta_destino, exist_ok=True)
             destino_local = os.path.join(carpeta_destino, nombre_archivo)
 
             self.user.descargar_de_usuario(origen, nombre_archivo, ruta_remota, destino_local)
             respuesta = self.user.subir_archivo(destino_local)
+
+            self._animar_texto = False
+            self.output_text.value = ""  # Limpiar después de detener animación
+
             if respuesta.startswith("PUT_OK"):
                 self.mensajes.controls.append(ft.Text(f"✅ Archivo recibido y subido: {nombre_archivo}", color=ft.Colors.GREY))
             else:
                 self.mensajes.controls.append(ft.Text(f"⚠️ Recibido pero error al subir: {respuesta}", color=ft.Colors.ORANGE))
+
             self.cargar_archivos()
         except Exception as e:
-            self.mensajes.controls.append(ft.Text(f"❌ Error: {e}", color=ft.Colors.RED))
+            self._animar_texto = False
+            self.output_text.value = f"❌ Error: {e}"
+            self.mensajes.controls.append(ft.Text(self.output_text.value, color=ft.Colors.RED))
         finally:
             self.page.update()
 
+
     def volver_home(self, e):
         destino = self.destino_input.value.strip()
-        if destino:
-            self.user._enviar_mensaje(f"CHAT|{self.nome}|{destino}|{self.nome} se desconectó del chat.")
-        from home_view import HomeView
-        HomeView(self.page, self.user, self.nome).mostrar()
 
+        async def animar_y_volver():
+            self._animar_texto = True
+            self.animar_output_texto("🔄 Saliendo del chat")
+            import asyncio
+            await asyncio.sleep(1.5)  # pequeña espera para mostrar algo
+            self._animar_texto = False
+            self.output_text.value = ""
 
-# Para usarla:
-# ChatView(page, "julio", "maria")
+            if destino:
+                self.user._enviar_mensaje(f"CHAT|{self.nome}|{destino}|{self.nome} se desconectó del chat.")
+            
+            from home_view import HomeView
+            HomeView(self.page, self.user, self.nome).mostrar()
+
+        self.page.run_task(animar_y_volver)
