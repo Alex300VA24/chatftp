@@ -288,16 +288,8 @@ def cambiar_directorio(username, subcarpeta):
         print(f"[DEBUG cambiar_directorio] Falló CD → {respuesta}")
         return False
 
-
-
-
-
-
-
 def obtener_ruta_actual():
     return "/" + "/".join(ruta_actual) if ruta_actual else "/"
-
-
 
 
 # Hilo de escucha global

@@ -26,8 +26,6 @@ archivos_en_envio = {}
 
 
 def manejar_mensaje(data, addr, sock):
-
-
     mensaje_completo = data.decode()
     if not mensaje_completo.startswith("SEQ="):
         respuesta = "ERROR|Falta número de secuencia (SEQ)"
@@ -112,10 +110,6 @@ def manejar_mensaje(data, addr, sock):
         cache_respuestas[addr] = (seq, respuesta)
         sock.sendto(respuesta_final.encode(), addr)
 
-
-
-
-
     elif mensaje.startswith("CHAT|"):
         partes = mensaje.split("|", 3)
         if len(partes) == 4:
@@ -165,9 +159,6 @@ def manejar_mensaje(data, addr, sock):
             cache_respuestas[addr] = (seq, respuesta)
             sock.sendto(respuesta_final.encode(), addr)
 
-
-
-
     elif mensaje.startswith("NOTIFY|"):
         try:
             _, destinatario, remitente = mensaje.split("|", 2)
@@ -193,11 +184,6 @@ def manejar_mensaje(data, addr, sock):
             sock.sendto(respuesta.encode(), addr)
 
 
-
-
-
-
-    
     elif mensaje.startswith("LS|"):
         partes = mensaje.split("|")
         usuario = partes[1]
@@ -297,9 +283,7 @@ def manejar_mensaje(data, addr, sock):
                     fin = f"GET_END|{nombre}"
                     sock.sendto(f"SEQ_ACK={seq}|{fin}".encode(), addr)
                     cache_respuestas[addr] = (seq, fin)
-            if bloque_id == info["actual"]:
-                # Bloque esperado → Enviar y avanzar
-                ...
+                    
             elif bloque_id == info["actual"] - 1:
                 # REENVÍO del último bloque porque el cliente no recibió la respuesta
                 print(f"[REINTENTO DETECTADO] Reenviando bloque {bloque_id} a {addr}")
@@ -364,9 +348,6 @@ def manejar_mensaje(data, addr, sock):
                 sock.sendto(f'SEQ_ACK={seq}|{respuesta}'.encode(), addr)
         else:
             sock.sendto("ERROR|Formato incorrecto para GET_ACK_FROM".encode(), addr)
-
-
-
 
     elif mensaje.startswith("PUT_START|"):
         _, usuario, nombre, total_bloques = mensaje.split("|")
