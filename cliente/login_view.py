@@ -1,42 +1,50 @@
 import flet as ft
-from socket_client import enviar_mensaje
+from home_view import HomeView
 
-def mostrar_login(page: ft.Page, guardar_usuario_callback=None):
+class LoginView:
+    def __init__(self, page: ft.Page, user):
+        self.page = page
+        self.cliente = user
 
-    page.controls.clear()
-    usuario = ft.TextField(label="Usuario", autofocus=True)
-    clave = ft.TextField(label="Contraseña", password=True)
-    mensaje = ft.Text("")
+        self.usuario = ft.TextField(label="Usuario", autofocus=True)
+        self.clave = ft.TextField(label="Contraseña", password=True)
+        self.mensaje = ft.Text("")
 
-    def procesar_login(e):
-        resp = enviar_mensaje(f"LOGIN|{usuario.value}|{clave.value}")
+        self.page.window.prevent_close = False
+
+    def procesar_login(self, e):
+        nome_usuario = self.usuario.value
+        password = self.clave.value
+        self.cliente.login(nome_usuario)
+        resp = self.cliente._enviar_mensaje(f"LOGIN|{nome_usuario}|{password}")
+
         if resp == "LOGIN_OK":
-            mensaje.value = "✅ Acceso concedido"
-            page.clean()
-            # Importación aquí evita el ciclo
-            from home_view import mostrar_home
-            mostrar_home(page, usuario.value)
+            self.mensaje.value = "✅ Acceso concedido"
+            self.page.clean()
+            HomeView(self.page, self.cliente, self.usuario.value).mostrar()
         else:
-            mensaje.value = f"❌ {resp}"
-        page.update()
+            self.mensaje.value = f"❌ {resp}"
+        self.page.update()
 
-    def procesar_registro(e):
-        from register_view import mostrar_registro
-        mostrar_registro(page)
+    def procesar_registro(self, e):
+        from register_view import RegisterView
+        RegisterView(self.page, self.cliente).mostrar()
 
+    def mostrar(self):
+        self.page.title = "MyFTP - Login"
+        self.page.vertical_alignment = ft.MainAxisAlignment.CENTER
 
-    page.title = "MyFTP - Login"
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-
-    page.add(
-        ft.Column([
-            ft.Text("🔐 Bienvenido a MyFTP", size=24, weight="bold"),
-            usuario,
-            clave,
-            ft.Row([
-                ft.ElevatedButton("Iniciar sesión", on_click=procesar_login),
-                ft.ElevatedButton("Registrarse", on_click=procesar_registro),
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            mensaje
-        ], width=400, alignment=ft.MainAxisAlignment.CENTER)
-    )
+        self.page.controls.clear()
+        self.page.add(
+            ft.Column([
+                ft.Text("🔐 Bienvenido a MyFTP", size=24, weight="bold"),
+                self.usuario,
+                self.clave,
+                ft.Row([
+                    ft.ElevatedButton("Iniciar sesión", on_click=self.procesar_login),
+                    ft.ElevatedButton("Registrarse", on_click=self.procesar_registro),
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                self.mensaje
+            ], width=400, alignment=ft.MainAxisAlignment.CENTER)
+        )
+        self.page.update()
