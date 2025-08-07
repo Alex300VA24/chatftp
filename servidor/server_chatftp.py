@@ -13,7 +13,7 @@ from utils import inicializar_directorios, directorios_actuales
 
 # Class ServerChatFTP
 class ServerChatFTP:
-    def __init__(self, ip="0.0.0.0", port=2121, buffer_size=4096):
+    def __init__(self, ip="192.168.3.38", port=2121, buffer_size=4096):
         self.ip = ip
         self.port = port
         self.buffer_size = buffer_size

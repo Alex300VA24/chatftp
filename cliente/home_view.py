@@ -65,21 +65,27 @@ class HomeView:
             self.output_text
         ], expand=True)
 
-        usuarios_activos = auth.obtener_usuarios_activos()
-        lista_usuarios = self.construir_lista_usuarios(self.nome, usuarios_activos, self.notificar_usuario)
+        self.usuarios_activos = auth.obtener_usuarios_activos()
+        self.lista_usuarios = self.construir_lista_usuarios(self.nome, self.usuarios_activos, self.notificar_usuario)
 
         etiqueta_usuarios = ft.Text('Lista de usuarios conectados', color=ft.Colors.WHITE)
+        boton_recargar = ft.IconButton(icon=ft.Icons.REFRESH, on_click=self.recargar_usuarios)
 
         layout = ft.Row([
-            ft.Container(content=lista_usuarios, padding=10, width=150, bgcolor=ft.Colors.GREY_200),
+            ft.Container(content=self.lista_usuarios, padding=10, width=150, bgcolor=ft.Colors.GREY_200),
             ft.VerticalDivider(width=1),
             ft.Container(content=panel_contenido, padding=10, expand=True)
         ], expand=True)
 
         self.page.controls.clear()
-        self.page.add(etiqueta_usuarios,layout, ft.Button("Cerrar Session", on_click=self.logout))
+        self.page.add(etiqueta_usuarios,boton_recargar, layout, ft.Button("Cerrar Session", on_click=self.logout))
         self.cargar_directorio()
         self.page.update()
+    
+    def recargar_usuarios(self, _):
+        self.usuarios_activos = auth.obtener_usuarios_activos()
+        self.lista_usuarios = self.construir_lista_usuarios(self.nome, self.usuarios_activos, self.notificar_usuario)
+        self.mostrar()
 
     def recibir_mensaje_home(self, mensaje: str):
         if mensaje.startswith("NOTIFY|"):

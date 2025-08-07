@@ -4,7 +4,7 @@ from client_chatftp import ChatFTPClient  # tu clase de comunicación UDP
 
 SERVER_IP = "192.168.3.38"
 #SERVER_IP = "172.30.17.209"
-#SERVER_IP = "172.30.12.61"
+#SERVER_IP = "172.30.13.222"
 SERVER_PORT = 2121
 
 def main(page: ft.Page):
